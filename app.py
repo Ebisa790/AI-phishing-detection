@@ -1,56 +1,58 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
+import numpy as np
 from feature_extraction import extract_features
-import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Load model safely
-model_path = os.path.join(os.path.dirname(__file__), "model.pkl")
-model = joblib.load(model_path)
-
-@app.route('/')
-def home():
-    return "AI Phishing Detection API is running!"
+# Load the model
+try:
+    model = joblib.load("model.pkl")
+    print("Model loaded successfully!")
+except Exception as e:
+    print(f"CRITICAL ERROR: Could not load model.pkl. {e}")
+    model = None
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         data = request.get_json()
-
-        if not data or "url" not in data:
-            return jsonify({"error": "No URL provided"}), 400
-
-        url = data['url']
-
-        if len(url) < 5:
-            return jsonify({"error": "Invalid URL"}), 400
-
+        url = data.get('url')
+        
+        # Extract features
         features = extract_features(url)
+        
+        # Convert to 2D array - 
+        features_array = np.array([features]) 
+        
+        # Get probability
+        prob = model.predict_proba(features_array)[0][1]
 
-        prediction = model.predict([features])[0]
-        prob = model.predict_proba([features])[0][1]
 
-        # 🔥 smarter classification
-        if prob > 0.8:
+        if prob > 0.7:
             result = "Phishing"
-        elif prob > 0.5:
+        elif prob > 0.4:
             result = "Suspicious"
         else:
             result = "Safe"
 
         return jsonify({
             "result": result,
-            "confidence": round(prob * 100, 2)
+            "confidence": round(float(prob) * 100, 2)
         })
 
+    # --- UPDATE IN app.py ---
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+     import traceback
+     errors = traceback.format_exc() # This gets the full error details
+     print(errors) # This shows in Render Logs
+     return jsonify({"error": str(e), "details": errors}), 500
 
+@app.route('/', methods=['GET'])
+def home():
+    return "Phishing Detection API is Running!"
 
-import os
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+if __name__ == '__main__':
+    app.run()
