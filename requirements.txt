@@ -6,3 +6,4 @@ numpy
 xgboost
 gunicorn
 imbalanced-learn
+mysql-connector-python
